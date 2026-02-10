@@ -189,6 +189,37 @@ async def bfhl(req: BFHLRequest):
                 except requests.RequestException as e:
                     raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Anthropic error: {str(e)}")
 
+            def call_gemini(q: str) -> str:
+                # Call Google Generative Language (Gemini) REST endpoint using API key
+                if not GEMINI_API_KEY:
+                    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Gemini API key not configured")
+                # Use the public REST endpoint for text generation (model name may vary)
+                url = f"https://generativelanguage.googleapis.com/v1/models/text-bison-001:generate?key={GEMINI_API_KEY}"
+                body = {
+                    "prompt": {"text": q},
+                    "maxOutputTokens": 64,
+                    "temperature": 0.0,
+                }
+                headers = {"Content-Type": "application/json"}
+                try:
+                    r = requests.post(url, json=body, headers=headers, timeout=10)
+                    r.raise_for_status()
+                    data = r.json()
+                    # response structure for generativelanguage: 'candidates' -> list with 'output' or 'content' or 'content'
+                    text = ""
+                    if isinstance(data, dict):
+                        if "candidates" in data and isinstance(data["candidates"], list) and len(data["candidates"]):
+                            cand = data["candidates"][0]
+                            # try common fields
+                            text = cand.get("output") or cand.get("content") or cand.get("displayText") or ""
+                        else:
+                            # some versions return 'output' directly
+                            text = data.get("output") or data.get("content") or ""
+                    text = (text or "").strip()
+                    return text.split()[0] if text else ""
+                except requests.RequestException as e:
+                    raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Gemini error: {str(e)}")
+
             # Provider selection
             try:
                 if AI_PROVIDER == "openai":
@@ -196,8 +227,7 @@ async def bfhl(req: BFHLRequest):
                 elif AI_PROVIDER == "anthropic":
                     word = call_anthropic(question)
                 elif AI_PROVIDER == "gemini":
-                    # Gemini support requires additional setup; inform user
-                    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Gemini provider support not implemented. Provide GEMINI_API_KEY and implementation will be added.")
+                    word = call_gemini(question)
                 else:
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown AI_PROVIDER")
                 return JSONResponse(status_code=200, content=make_success(word))
