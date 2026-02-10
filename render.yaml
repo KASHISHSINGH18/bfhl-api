@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: bfhl-api
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python main.py"
+    envVars:
+      - key: OFFICIAL_EMAIL
+        value: "YOUR_CHITKARA_EMAIL"
+      - key: OPENAI_API_KEY
+        value: ""
+      - key: ANTHROPIC_API_KEY
+        value: ""
